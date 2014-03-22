@@ -103,13 +103,28 @@ class Modus{
 		Modus(){
 			currentstate = INAKTIV;
 		}
-
-		void SetState(modstate state){
-			if ( GetState() == state){
+		
+		static void*  calltransit(void *arg) {
+			return ((Modus*)arg)->transit(); 
+		}
+		
+		void * transit(void)
+		{
+			sleep(3000);
+			if(currentstate == AKTIVIEREND)
+				currentstate = AKTIV;
+			if(currentstate == DEAKTIVIEREND)
+				currentstate = INAKTIV;
+			return NULL;
+		}
+		
+		
+		void SetState(modstate staterequest){
+			if ( GetState() == staterequest){
 				return;
 			}
 		
-			if ( GetState() == AKTIV && state == INAKTIV){
+			if ( GetState() == AKTIV && staterequest == INAKTIV){
 				
 				currentstate = DEAKTIVIEREND;
 				
@@ -119,14 +134,18 @@ class Modus{
 				currentstate = INAKTIV;
 			}
 			
-			if( GetState() == INAKTIV && state == AKTIV){
+			if( GetState() == INAKTIV && staterequest == AKTIV){
 				
 				currentstate = AKTIVIEREND;
 				
-				//SetTimer(&change, 10000, 0);
-				// SetTimer muss noch die Funktion setmodus mit den Argumenten übergeben werden setmodus(idx, soll);
-				currentstate = AKTIV;
+				//dann in thread reinspringen und von AKTIVIEREND auf AKTIV
+				
+				
 			}
+			
+			pthread_t transitptr;
+				
+			pthread_create(&transitptr, NULL, calltransit, NULL);
 		}
 		
 		modstate GetState() {
@@ -134,21 +153,15 @@ class Modus{
 		}
 };
 
+
+
 class Modusmanager{
 	
 	public:
-		//an der Stelle das Vektorfeld reinsetzen, Konstruktor soll N modi initialisieren
-		std::vector<Modus> moduslist;
-		Modusmanager(int N) : moduslist(N){}; //N ist die Anzahl der Modi, alle default INAKTIV
-		
-		//SetState(int idx, modstate state); //Modi hinter idx auf den modstate state setzen
-		//modstate GetState(int idx);
-	/*	
-	void SetState(char stateID, char idx) {
-		moduslist[idx] = modus.SetState;
-	}
-	*/
 	
+	std::vector<Modus> moduslist;
+	Modusmanager(int N) : moduslist(N){};
+		
 	modstate GetState(char idx) {
 		return moduslist[idx].GetState();
 	}
@@ -164,18 +177,12 @@ class Modusmanager{
 
 Modusmanager modusmanager(2); //mit 2 Modi initialisieren
 
-struct statusmessage{
-	struct sockaddr_in add; //Adresse für den Sender oder vom Empfänger
-	socklen_t addlen; //Die Länge der Adresse
-	Modusmanager modusmanager;
-	
-	statusmessage(struct sockaddr_in add, socklen_t addlen, Modusmanager modusmanager) : add(add),addlen(addlen),modusmanager(modusmanager){}
-};
 
 std::string makePayload(const char senderID, const char functionID, std::string payload){
 	return std::string(1,kennung1) + std::string(1,kennung2) + std::string(1,senderID) + std::string(1,functionID) + payload + '\0';
 }
 
+//compare ist für die clientlist, um zu sehen, ob ein Client bereits in der Menge verbundener Clients enthalten ist
 struct compare {
 	bool operator()(const sockaddr_in& lhs, const sockaddr_in& rhs) {
 		if (lhs.sin_family < rhs.sin_family)
@@ -194,19 +201,15 @@ struct compare {
 	}
 };
 
-std::set<sockaddr_in, compare> clientlist; //Liste für die verbundenen Clients	
+//Menge der verbundenen Clients
+std::set<sockaddr_in, compare> clientlist;
 
+//server Socket initialisieren auf Port 2001
 socketRAII server(2001, INADDR_ANY);
 
 
 void * modussenden(void *message)
 {
-	struct message *addrmodus = reinterpret_cast<struct message *>(message);
-	
-	if (addrmodus == NULL){
-		return NULL;
-	}
-	
 	for(;;)
 	{
 		// Jeden Modus anhand der ID durchlaufen, dessen Status mit getmodus holen und mit senden rausschicken
@@ -229,34 +232,16 @@ void * modussenden(void *message)
 	return NULL;
 }
 
-//void *statusthread(){
-//	for(;;){
-		
-//void *input()
-
 int batt = 50;
 std::string s1("Batterie");
 
 void *infosenden(void *message){
-	
-	struct message *addrinfo = reinterpret_cast<struct message *>(message);
-	
-	if (addrinfo == NULL){
-		return NULL;
-	}
-	
-	struct message infomessage(1024, addrinfo->add,addrinfo->addlen);
-	
-	infomessage.buffer[0] = kennung1;
-	infomessage.buffer[1] = kennung2;
-	infomessage.buffer[2] = senderID;
-	infomessage.buffer[3] = functionID_info;
-	
+
 	for(;;)
-	{  // give a second to hit something
-		if(kbhit())            // if the user presses a key
+	{ 
+		if(kbhit())   //kbhit liefert bool ob der Nutzer Taste gedrueckt hat
 		{
-			char c = getchar();
+			char c = getchar(); //c enthaelt den char der gedrueckten Taste
 
 			if(c == '+'){
 				batt++;
@@ -266,7 +251,7 @@ void *infosenden(void *message){
 			}
 			if(c == '+' || c == '-'){
 				
-				//Umweg über sstream
+				//Umweg über sstream, da  sonst ein cast Fehler von int zu const char auftaucht
 				std::stringstream ss;
 				ss << batt;
 				
@@ -277,10 +262,7 @@ void *infosenden(void *message){
 					struct message infomessage(payload, *it, static_cast<socklen_t>(sizeof *it));
 					server.send(infomessage);
 				}
-				
-				
 			}
-
 			//damit er mir strg+c noch nimmt
 			if(c == 3){
 				break;
