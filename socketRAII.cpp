@@ -6,7 +6,7 @@
 //Konstruktoren für struct message
 message::message(size_t size): buffer(size,0), add{0}, addlen(0){}
 message::message(size_t size, struct sockaddr_in add, socklen_t addlen) : buffer(size,0), add(add), addlen(addlen){}
-message::message(std::string payload, struct sockaddr_in add) : buffer(payload.begin(), payload.end()), add(add) ,addlen(sizeof add){}; 
+message::message(std::string payload, struct sockaddr_in add, socklen_t addlen) : buffer(payload.begin(), payload.end()), add(add) ,addlen(addlen){}; 
 	//sizeof add könnte krachen gehen, falls das passiert, dann wieder socklen_t addlen nehmen
 	//buffer(payload.begin(), payload.end()) kopiert den std::string in den buffer rein
 	

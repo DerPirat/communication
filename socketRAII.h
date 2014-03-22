@@ -3,6 +3,7 @@
 
 #include<vector>
 #include <netinet/in.h>
+#include <string>
 
 struct message{
 	
@@ -12,6 +13,7 @@ struct message{
 	
 	message(size_t size);
 	message(size_t size, struct sockaddr_in add, socklen_t addlen);
+	message(std::string payload, struct sockaddr_in add, socklen_t addlen);
 };
 
 class socketRAII

@@ -8,7 +8,7 @@
 #include "socketRAII.h"
 #include <termios.h>
 #include <set>
-
+#include <sstream>
 
      int kbhit(void) {
 
@@ -212,9 +212,9 @@ void * modussenden(void *message)
 		// Jeden Modus anhand der ID durchlaufen, dessen Status mit getmodus holen und mit senden rausschicken
 		for( int idx = 0 ; idx < modusmanager.moduslist.size(); idx++){
 			//An jeden Client aus der clientlist nachricht schicken
-			for(::std::set<sockaddr_in, compare>::iterator it = clientlist.begin(); it != set.end(); it++)
+			for(std::set<sockaddr_in, compare>::iterator it = clientlist.begin(); it != clientlist.end(); it++)
 			{
-				struct message sendemessage(6, it->add, sizeof it->add);
+				struct message sendemessage(6, *it, sizeof *it);
 				sendemessage.buffer[0] = kennung1;
 				sendemessage.buffer[1] = kennung2;
 				sendemessage.buffer[2] = senderID;
@@ -250,7 +250,7 @@ void *infosenden(void *message){
 	infomessage.buffer[0] = kennung1;
 	infomessage.buffer[1] = kennung2;
 	infomessage.buffer[2] = senderID;
-	infomessage.buffer[3] = functionID;
+	infomessage.buffer[3] = functionID_info;
 	
 	for(;;)
 	{  // give a second to hit something
@@ -266,10 +266,19 @@ void *infosenden(void *message){
 			}
 			if(c == '+' || c == '-'){
 				
-				std::string payload = makePayload(senderID, functionID_info, s1+ std::string(batt));
-				struct message infomessage(payload, remoteaddress);
+				//Umweg über sstream
+				std::stringstream ss;
+				ss << batt;
 				
-				server.send(infomessage);
+				std::string payload = makePayload(senderID, functionID_info, s1+ ss.str());
+				
+				for(std::set<sockaddr_in, compare>::iterator it= clientlist.begin(); it != clientlist.end(); it++){
+					
+					struct message infomessage(payload, *it, static_cast<socklen_t>(sizeof *it));
+					server.send(infomessage);
+				}
+				
+				
 			}
 
 			//damit er mir strg+c noch nimmt
@@ -284,11 +293,11 @@ void *empfangen(void *message){
 
 	for(;;){
 		struct message rcvmessage = server.receive();
-		clientlist.insert(rcvmessage.remoteaddress);
+		clientlist.insert(rcvmessage.add);
 		
-		if(rcvmessage.buffer[0] == kennung1 && rcvmessage.buffer[1] == kennung2 && rcvmessage == functionID_request){
-			char idx = message.buffer[4];
-			char state = message.buffer[5];
+		if(rcvmessage.buffer[0] == kennung1 && rcvmessage.buffer[1] == kennung2 && rcvmessage.buffer[3] == functionID_request){
+			char idx = rcvmessage.buffer[4];
+			char state = rcvmessage.buffer[5];
 			modusmanager.SetState(idx,state);
 		}
 	}
