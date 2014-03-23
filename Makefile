@@ -1,4 +1,4 @@
-all: server
+all: server client
 clean:
 	rm -f server client *.o
 
