@@ -85,14 +85,24 @@ const char functionID_info = 0x03;
  
 //template fürsockaddr_in remoteaddress; verschiedene Vektoren 
 //Gibt Referenz auf ostream zurück
-template<typename T, typename alloc>
-std::ostream& operator<<(std::ostream& out, std::vector<T, alloc> v) {
-  for (typename std::vector<T, alloc>::iterator it = v.begin(); it != v.end(); it++)
-    out << *it << ' ';
-  return out;
+
+	template<typename T, typename alloc>
+	std::ostream& operator<<(std::ostream& out, std::vector<T, alloc> v) {
+	  for (typename std::vector<T, alloc>::iterator it = v.begin(); it != v.end(); it++)
+	    out << *it << ' ';
+	  return out;
+	}
+
+/*
+namespace int_cast{
+	template<typename T, typename alloc>
+	std::ostream& operator<<(std::ostream& out, std::vector<T, alloc> v) {
+	  for (typename std::vector<T, alloc>::iterator it = v.begin(); it != v.end(); it++)
+	    out << static_cast<int>(*it)) << ' ';
+	  return out;
+	}
 }
-
-
+*/
 class Modus{
 	private:
 		modstate currentstate;
@@ -103,23 +113,30 @@ class Modus{
 		Modus(){
 			currentstate = INAKTIV;
 		}
+
 		
-		static void*  calltransit(void *arg) {
-			return ((Modus*)arg)->transit(); 
-		}
-		
-		void * transit(void)
+		static void * transit(void* arg)
 		{
-			sleep(3000);
-			if(currentstate == AKTIVIEREND)
-				currentstate = AKTIV;
-			if(currentstate == DEAKTIVIEREND)
-				currentstate = INAKTIV;
+			std::cout <<"hallo vom transit" << std::endl;
+			Modus* test = reinterpret_cast<Modus*>(arg);
+			if (test == NULL)
+				return NULL;
+			
+
+			sleep(3);
+			while(test->currentstate == AKTIVIEREND)
+				test->currentstate = AKTIV;
+			while(test->currentstate == DEAKTIVIEREND)
+				test->currentstate = INAKTIV;
 			return NULL;
 		}
 		
 		
 		void SetState(modstate staterequest){
+			
+			
+			std::cout << std::endl <<  "staterequest: " << staterequest << std::endl;
+			std::cout << GetState() << std::endl;
 			if ( GetState() == staterequest){
 				return;
 			}
@@ -127,27 +144,23 @@ class Modus{
 			if ( GetState() == AKTIV && staterequest == INAKTIV){
 				
 				currentstate = DEAKTIVIEREND;
-				
+				std::cout << "currentstate DEAKTIVIEREND" << std::endl;
 				//SetTimer(&change, 10000, 0);
 				// SetTimer muss noch die Funktion setmodus mit den Argumenten übergeben werden setmodus(idx, soll);
-				
-				currentstate = INAKTIV;
 			}
 			
 			if( GetState() == INAKTIV && staterequest == AKTIV){
 				
 				currentstate = AKTIVIEREND;
+				std::cout << "currentstate AKTIVIEREND" << std::endl;
 				
 				//dann in thread reinspringen und von AKTIVIEREND auf AKTIV
-				
-				
 			}
 			
 			pthread_t transitptr;
 				
-			pthread_create(&transitptr, NULL, calltransit, NULL);
+			pthread_create(&transitptr, NULL, transit, this);
 		}
-		
 		modstate GetState() {
 			return currentstate;
 		}
@@ -168,10 +181,7 @@ class Modusmanager{
 
 
 	void SetState(char idx, char state) {
-		if (state == INAKTIV)
-			moduslist[idx].SetState(AKTIV);
-		else if (state == AKTIV)
-			moduslist[idx].SetState(INAKTIV);
+		moduslist[idx].SetState(static_cast<modstate>(state));
 	}
 };
 
@@ -256,12 +266,17 @@ void *infosenden(void *message){
 				ss << batt;
 				
 				std::string payload = makePayload(senderID, functionID_info, s1+ ss.str());
+				std::cout <<"ey0"<<std::endl;
 				
-				for(std::set<sockaddr_in, compare>::iterator it= clientlist.begin(); it != clientlist.end(); it++){
-					
+				for(	std::set<sockaddr_in, compare>::iterator it= clientlist.begin(); it != clientlist.end(); it++){
+					std::cout <<"ey1"<<std::endl;
 					struct message infomessage(payload, *it, static_cast<socklen_t>(sizeof *it));
+					//std::cout << *it << std::endl;
+					std::cout <<"ey"<<std::endl;
+					std::cout << static_cast<socklen_t>(sizeof *it) << std::endl;
 					server.send(infomessage);
 				}
+				
 			}
 			//damit er mir strg+c noch nimmt
 			if(c == 3){
@@ -276,11 +291,13 @@ void *empfangen(void *message){
 	for(;;){
 		struct message rcvmessage = server.receive();
 		clientlist.insert(rcvmessage.add);
-		
+		std::cout << rcvmessage.add << std::endl;
 		if(rcvmessage.buffer[0] == kennung1 && rcvmessage.buffer[1] == kennung2 && rcvmessage.buffer[3] == functionID_request){
 			char idx = rcvmessage.buffer[4];
 			char state = rcvmessage.buffer[5];
 			modusmanager.SetState(idx,state);
+			std::cout <<"\nNachricht empfangen" << std::endl;
+			std::cout << std::vector<int>(rcvmessage.buffer.begin(), rcvmessage.buffer.end()) << std::endl;
 		}
 	}
 }
@@ -298,10 +315,15 @@ int main(void){
 	std::cout << "Server..." << std::endl;
 	
 	for (;;) {
-		
+		/*
 		std::cout << '\xd' << "Modus1: " << modusmanager.moduslist[0].GetState() << "   ";
 		std::cout <<  "Modus 2: " << modusmanager.moduslist[1].GetState() << "   ";
 		std::cout << "Batterie: " << batt << " %";
+		*/
+		
+		std::cout << "Modus1: " << modusmanager.moduslist[0].GetState() << std::endl;
+		std::cout <<  "Modus 2: " << modusmanager.moduslist[1].GetState() << std::endl;
+		std::cout << "Batterie: " << batt << " %" << std::endl;
 		
 	}
 }
