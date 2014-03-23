@@ -81,14 +81,6 @@ const char functionID_modus = 0x01;
 const char functionID_request = 0x02;
 const char functionID_info = 0x03;
  
-//template für verschiedene Vektoren 
-//Gibt Referenz auf ostream zurück
-template<typename T, typename alloc>
-std::ostream& operator<<(std::ostream& out, std::vector<T, alloc> v) {
-  for (typename std::vector<T, alloc>::iterator it = v.begin(); it != v.end(); it++)
-    out << *it << ' ';
-  return out;
-}
 
 //server Client initialisieren auf Port 3001
 socketRAII client(3001, INADDR_ANY);

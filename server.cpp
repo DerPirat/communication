@@ -9,7 +9,7 @@
 #include <termios.h>
 #include <set>
 #include <sstream>
-
+#include <unistd.h>
      int kbhit(void) {
 
        struct termios term, oterm;
@@ -86,23 +86,6 @@ const char functionID_info = 0x03;
 //template fürsockaddr_in remoteaddress; verschiedene Vektoren 
 //Gibt Referenz auf ostream zurück
 
-	template<typename T, typename alloc>
-	std::ostream& operator<<(std::ostream& out, std::vector<T, alloc> v) {
-	  for (typename std::vector<T, alloc>::iterator it = v.begin(); it != v.end(); it++)
-	    out << *it << ' ';
-	  return out;
-	}
-
-/*
-namespace int_cast{
-	template<typename T, typename alloc>
-	std::ostream& operator<<(std::ostream& out, std::vector<T, alloc> v) {
-	  for (typename std::vector<T, alloc>::iterator it = v.begin(); it != v.end(); it++)
-	    out << static_cast<int>(*it)) << ' ';
-	  return out;
-	}
-}
-*/
 class Modus{
 	private:
 		modstate currentstate;
@@ -117,7 +100,6 @@ class Modus{
 		
 		static void * transit(void* arg)
 		{
-			std::cout <<"hallo vom transit" << std::endl;
 			Modus* test = reinterpret_cast<Modus*>(arg);
 			if (test == NULL)
 				return NULL;
@@ -134,33 +116,27 @@ class Modus{
 		
 		void SetState(modstate staterequest){
 			
-			
+			/*
 			std::cout << std::endl <<  "staterequest: " << staterequest << std::endl;
 			std::cout << GetState() << std::endl;
+			*/
 			if ( GetState() == staterequest){
 				return;
 			}
 		
 			if ( GetState() == AKTIV && staterequest == INAKTIV){
-				
 				currentstate = DEAKTIVIEREND;
-				std::cout << "currentstate DEAKTIVIEREND" << std::endl;
-				//SetTimer(&change, 10000, 0);
-				// SetTimer muss noch die Funktion setmodus mit den Argumenten übergeben werden setmodus(idx, soll);
 			}
 			
 			if( GetState() == INAKTIV && staterequest == AKTIV){
-				
 				currentstate = AKTIVIEREND;
-				std::cout << "currentstate AKTIVIEREND" << std::endl;
-				
-				//dann in thread reinspringen und von AKTIVIEREND auf AKTIV
 			}
 			
 			pthread_t transitptr;
 				
 			pthread_create(&transitptr, NULL, transit, this);
 		}
+		
 		modstate GetState() {
 			return currentstate;
 		}
@@ -291,7 +267,7 @@ void *empfangen(void *message){
 	for(;;){
 		struct message rcvmessage = server.receive();
 		clientlist.insert(rcvmessage.add);
-		std::cout << rcvmessage.add << std::endl;
+		std::cout << rcvmessage<< std::endl;
 		if(rcvmessage.buffer[0] == kennung1 && rcvmessage.buffer[1] == kennung2 && rcvmessage.buffer[3] == functionID_request){
 			char idx = rcvmessage.buffer[4];
 			char state = rcvmessage.buffer[5];
@@ -313,17 +289,18 @@ int main(void){
 	pthread_create(&rcvptr, NULL, infosenden, NULL);
 
 	std::cout << "Server..." << std::endl;
-	
+
 	for (;;) {
+		
 		/*
 		std::cout << '\xd' << "Modus1: " << modusmanager.moduslist[0].GetState() << "   ";
 		std::cout <<  "Modus 2: " << modusmanager.moduslist[1].GetState() << "   ";
 		std::cout << "Batterie: " << batt << " %";
 		*/
-		
+		/*
 		std::cout << "Modus1: " << modusmanager.moduslist[0].GetState() << std::endl;
 		std::cout <<  "Modus 2: " << modusmanager.moduslist[1].GetState() << std::endl;
 		std::cout << "Batterie: " << batt << " %" << std::endl;
-		
+		*/
 	}
 }

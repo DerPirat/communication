@@ -10,7 +10,20 @@ message::message(std::string payload, struct sockaddr_in add, socklen_t addlen) 
 	//sizeof add könnte krachen gehen, falls das passiert, dann wieder socklen_t addlen nehmen
 	//buffer(payload.begin(), payload.end()) kopiert den std::string in den buffer rein
 	
-
+	std::ostream& operator<<(std::ostream& out, struct sockaddr_in addr){
+		out << "IP :"<<addr.sin_addr.s_addr << "Port: " << addr.sin_port;
+		return out;
+	}
+	
+	std::ostream& operator<<(std::ostream& out, struct message message){
+		out << "Laenge: "<<message.buffer.size() << std::endl;
+		out << "Nachricht: " << std::vector<int>(message.buffer.begin(), message.buffer.end()) << std::endl;
+		out << "Sender/Empfaenger: " << message.add;
+		return out;
+	}
+	
+	
+	
 socketRAII::socketRAII(sockaddr_in sa){
 	sa.sin_family = AF_INET;
 
@@ -32,7 +45,7 @@ socketRAII::socketRAII(int port, unsigned long int ip){
 	sa.sin_port = htons(port);
 	
 
-	sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP); //das soll von Haus aus UDP	
+	sock = socket(PF_INET, SOCK_DGRAM, 0); //das soll von Haus aus UDP	
 	int e = bind(sock,(struct sockaddr *)&sa, sizeof(sa));
 	if (-1 == e){
 		close(sock);
@@ -46,10 +59,14 @@ socketRAII::~socketRAII(){
 
 struct message socketRAII::receive(){
 	
+	sockaddr_in remote;
+	socklen_t remotelen= sizeof(remote);
 	struct message rcvmessage(1024);
-	ssize_t recsize = recvfrom(sock, &(rcvmessage.buffer[0]), rcvmessage.buffer.size(), 0, (struct sockaddr*)&(rcvmessage.add), &(rcvmessage.addlen));
+	//ssize_t recsize = recvfrom(sock, &(rcvmessage.buffer[0]), rcvmessage.buffer.size(), 0, (struct sockaddr*) &remote, &remotelen);
+	ssize_t recsize = recvfrom(sock, &(rcvmessage.buffer[0]), rcvmessage.buffer.size(), 0, (struct sockaddr*) &(rcvmessage.add), &(rcvmessage.addlen));
+	
 	rcvmessage.buffer.resize(recsize);
-			
+	std::cout << rcvmessage << std::endl;
 	return rcvmessage;
 }
 		

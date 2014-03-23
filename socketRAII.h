@@ -5,6 +5,17 @@
 #include <netinet/in.h>
 #include <string>
 
+	template<typename T, typename alloc>
+	std::ostream& operator<<(std::ostream& out, std::vector<T, alloc> v) {
+	  for (typename std::vector<T, alloc>::iterator it = v.begin(); it != v.end(); it++)
+	    out << *it << ' ';
+	  return out;
+	}
+	
+std::ostream& operator<<(std::ostream& out, struct sockaddr_in addr);
+std::ostream& operator<<(std::ostream& out, struct message message);
+	
+	
 struct message{
 	
 	std::vector<char> buffer; //Speicher für die gesendete oder empfangene Nachricht
