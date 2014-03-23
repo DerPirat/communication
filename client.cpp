@@ -6,81 +6,41 @@
 #include <pthread.h>
 #include <iostream>
 #include "socketRAII.h"
+#include "kennung.h"
  #include <termios.h>
-     int kbhit(void) {
 
-       struct termios term, oterm;
+int kbhit(void) {
+	struct termios term, oterm;
+	int fd = 0;
+	int c = 0;
+	tcgetattr(fd, &oterm);
+	memcpy(&term, &oterm, sizeof(term));
+	term.c_lflag = term.c_lflag & (!ICANON);
+	term.c_cc[VMIN] = 0;
+	term.c_cc[VTIME] = 1;
+	tcsetattr(fd, TCSANOW, &term);
+	c = getchar();
+	tcsetattr(fd, TCSANOW, &oterm);
+	if (c != -1)
+		ungetc(c, stdin);
+	
+	return ((c != -1) ? 1 : 0);
+}
 
-       int fd = 0;
 
-       int c = 0;
-
-       tcgetattr(fd, &oterm);
-
-       memcpy(&term, &oterm, sizeof(term));
-
-       term.c_lflag = term.c_lflag & (!ICANON);
-
-       term.c_cc[VMIN] = 0;
-
-       term.c_cc[VTIME] = 1;
-
-       tcsetattr(fd, TCSANOW, &term);
-
-       c = getchar();
-
-       tcsetattr(fd, TCSANOW, &oterm);
-
-       if (c != -1)
-
-       ungetc(c, stdin);
-
-       return ((c != -1) ? 1 : 0);
-
-    }
-    
-    int getch()
-    {
-
-       static int ch = -1, fd = 0;
-
-       struct termios neu, alt;
-
-       fd = fileno(stdin);
-
-       tcgetattr(fd, &alt);
-
-       neu = alt;
-
-       neu.c_lflag &= ~(ICANON|ECHO);
-
-       tcsetattr(fd, TCSANOW, &neu);
-
-       ch = getchar();
-
-       tcsetattr(fd, TCSANOW, &alt);
-
-       return ch;
-
-    }
-    
-    
- typedef enum modstate
-{
-    INAKTIV = 0x00,    
-    AKTIV = 0x01,    
-    DEAKTIVIEREND = 0x02,
-    AKTIVIEREND = 0x03
-} modstate;
-
-const char kennung1 = 0x3C;
-const char kennung2 = 0x01;
-const char senderID_server = 0x00;
-const char senderID_client1 = 0x01; //Client 1, Server hat 0x00;
-const char functionID_modus = 0x01;
-const char functionID_request = 0x02;
-const char functionID_info = 0x03;
- 
+int getch(){
+	static int ch = -1, fd = 0;
+	struct termios neu, alt;
+	fd = fileno(stdin);
+	tcgetattr(fd, &alt);
+	neu = alt;
+	neu.c_lflag &= ~(ICANON|ECHO);
+	tcsetattr(fd, TCSANOW, &neu);
+	ch = getchar();
+	tcsetattr(fd, TCSANOW, &alt);
+	
+	return ch;
+}
 
 //server Client initialisieren auf Port 3001
 socketRAII client(3001, INADDR_ANY);
@@ -109,12 +69,12 @@ void *clientrequest(void *message){
 			//char c1 = getchar();
 			char c1;
 			char c2;
-			std::cout << "Modusrequest:" << std::endl;
+			std::cout << "Modusrequest: ";
 			std::cin >> c1;
 			
 			if(c1 == '0' || c1 == '1')
 			{
-				std::cout << "Statusrequest:" << std::endl;
+				std::cout << "Statusrequest: ";
 				std::cin >> c2;
 				int modrequest = c1 - '0';				
 				//if(kbhit())  
@@ -129,7 +89,6 @@ void *clientrequest(void *message){
 						requestmessage.buffer[4] = modrequest;
 						requestmessage.buffer[5] = staterequest;
 						client.send(requestmessage);
-						std::cout << "gesendet" << std::endl;
 					}
 				//}
 			}
@@ -141,6 +100,25 @@ void *clientrequest(void *message){
 	}
 }
 
+class Modusmanager{
+	
+	public:
+	
+	std::vector<int> moduslist;
+	Modusmanager(int N) : moduslist(N){};
+		
+	int GetState(char idx) {
+		return moduslist[idx];
+	}
+
+
+	void SetState(char idx, char state) {
+		moduslist[idx] = state;
+	}
+};
+
+Modusmanager modusmanager(2);
+int batt = 50;
 
 void *empfangen(void *message){
 
@@ -148,14 +126,33 @@ void *empfangen(void *message){
 		struct message rcvmessage = client.receive();
 		
 		if(rcvmessage.buffer[0] == kennung1 && rcvmessage.buffer[1] == kennung2 && rcvmessage.buffer[2] == senderID_server){
-
+			
+			 if(rcvmessage.buffer[3] == functionID_modus){
+				char idx = rcvmessage.buffer[4];
+				char state = rcvmessage.buffer[5];
+				modusmanager.SetState(idx,state);
+			 }
+			 
+			 if(rcvmessage.buffer[3] == functionID_info){
+				 std::string data_name(&rcvmessage.buffer.at(4));
+				 std::cout << rcvmessage << std::endl;
+				
+				 std::string data_value (&rcvmessage.buffer.at(4 + data_name.size() +1));
+				 std::cout << data_name << ' ' << data_value << std::endl;
+			 }
+				 
+				 		 
 		}
 	}
 }
 
+
  
 
 int main(void){
+	
+	
+
 	
 	pthread_t requestptr, receiveptr;
 	
@@ -166,6 +163,13 @@ int main(void){
 	std::cout << "Client..." << std::endl;
 	
 	for(;;){
+		
+		usleep(3000);
+		
+		std::cout << '\xd' << "Modus1: " << modusmanager.moduslist[0]<< "   ";
+		std::cout <<  "Modus 2: " << modusmanager.moduslist[1] << "   ";
+		
+		
 	}
 	/*
 	std::cout << "Verbinde..." << std::endl;

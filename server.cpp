@@ -10,101 +10,55 @@
 #include <set>
 #include <sstream>
 #include <unistd.h>
-     int kbhit(void) {
+#include "kennung.h"
+     
+int kbhit(void) {
+	struct termios term, oterm;
+	int fd = 0;
+	int c = 0;
+	tcgetattr(fd, &oterm);
+	memcpy(&term, &oterm, sizeof(term));
+	term.c_lflag = term.c_lflag & (!ICANON);
+	term.c_cc[VMIN] = 0;
+	term.c_cc[VTIME] = 1;
+	tcsetattr(fd, TCSANOW, &term);
+	c = getchar();
+	tcsetattr(fd, TCSANOW, &oterm);
+	if (c != -1)
+		ungetc(c, stdin);
+	
+	return ((c != -1) ? 1 : 0);
+}
 
-       struct termios term, oterm;
 
-       int fd = 0;
-
-       int c = 0;
-
-       tcgetattr(fd, &oterm);
-
-       memcpy(&term, &oterm, sizeof(term));
-
-       term.c_lflag = term.c_lflag & (!ICANON);
-
-       term.c_cc[VMIN] = 0;
-
-       term.c_cc[VTIME] = 1;
-
-       tcsetattr(fd, TCSANOW, &term);
-
-       c = getchar();
-
-       tcsetattr(fd, TCSANOW, &oterm);
-
-       if (c != -1)
-
-       ungetc(c, stdin);
-
-       return ((c != -1) ? 1 : 0);
-
-    }
-    
-    int getch()
-    {
-
-       static int ch = -1, fd = 0;
-
-       struct termios neu, alt;
-
-       fd = fileno(stdin);
-
-       tcgetattr(fd, &alt);
-
-       neu = alt;
-
-       neu.c_lflag &= ~(ICANON|ECHO);
-
-       tcsetattr(fd, TCSANOW, &neu);
-
-       ch = getchar();
-
-       tcsetattr(fd, TCSANOW, &alt);
-
-       return ch;
-
-    }
-    
-    
- typedef enum modstate
-{
-    INAKTIV = 0x00,    
-    AKTIV = 0x01,    
-    DEAKTIVIEREND = 0x02,
-    AKTIVIEREND = 0x03
-} modstate;
-
-const char kennung1 = 0x3C;
-const char kennung2 = 0x01;
-const char senderID = 0x00;
-const char functionID_modus = 0x01;
-const char functionID_request = 0x02;
-const char functionID_info = 0x03;
- 
-//template fürsockaddr_in remoteaddress; verschiedene Vektoren 
-//Gibt Referenz auf ostream zurück
+int getch(){
+	static int ch = -1, fd = 0;
+	struct termios neu, alt;
+	fd = fileno(stdin);
+	tcgetattr(fd, &alt);
+	neu = alt;
+	neu.c_lflag &= ~(ICANON|ECHO);
+	tcsetattr(fd, TCSANOW, &neu);
+	ch = getchar();
+	tcsetattr(fd, TCSANOW, &alt);
+	
+	return ch;
+}
 
 class Modus{
 	private:
 		modstate currentstate;
 	public:
-		//modstate GetState();
-		//void SetState(modstate state);
-	
 		Modus(){
 			currentstate = INAKTIV;
 		}
 
-		
 		static void * transit(void* arg)
 		{
 			Modus* test = reinterpret_cast<Modus*>(arg);
 			if (test == NULL)
 				return NULL;
 			
-
 			sleep(3);
 			while(test->currentstate == AKTIVIEREND)
 				test->currentstate = AKTIV;
@@ -163,9 +117,8 @@ class Modusmanager{
 
 Modusmanager modusmanager(2); //mit 2 Modi initialisieren
 
-
 std::string makePayload(const char senderID, const char functionID, std::string payload){
-	return std::string(1,kennung1) + std::string(1,kennung2) + std::string(1,senderID) + std::string(1,functionID) + payload + '\0';
+	return std::string(1,kennung1) + std::string(1,kennung2) + std::string(1,senderID) + std::string(1,functionID) + payload;
 }
 
 //compare ist für die clientlist, um zu sehen, ob ein Client bereits in der Menge verbundener Clients enthalten ist
@@ -206,13 +159,13 @@ void * modussenden(void *message)
 				struct message sendemessage(6, *it, sizeof *it);
 				sendemessage.buffer[0] = kennung1;
 				sendemessage.buffer[1] = kennung2;
-				sendemessage.buffer[2] = senderID;
+				sendemessage.buffer[2] = senderID_server;
 				sendemessage.buffer[3] = functionID_modus;
 				sendemessage.buffer[4] = idx;
 				sendemessage.buffer[5] = modusmanager.GetState(idx);
 				server.send(sendemessage);
 			}		
-		sleep(200); //200 ms schlafen legen
+		usleep(20000); //200 ms schlafen legen
 		}
 	}
 	return NULL;
@@ -241,15 +194,10 @@ void *infosenden(void *message){
 				std::stringstream ss;
 				ss << batt;
 				
-				std::string payload = makePayload(senderID, functionID_info, s1+ ss.str());
-				std::cout <<"ey0"<<std::endl;
-				
+				std::string payload = makePayload(senderID_server, functionID_info, s1+ '\0' + ss.str() + '\0');
+
 				for(	std::set<sockaddr_in, compare>::iterator it= clientlist.begin(); it != clientlist.end(); it++){
-					std::cout <<"ey1"<<std::endl;
 					struct message infomessage(payload, *it, static_cast<socklen_t>(sizeof *it));
-					//std::cout << *it << std::endl;
-					std::cout <<"ey"<<std::endl;
-					std::cout << static_cast<socklen_t>(sizeof *it) << std::endl;
 					server.send(infomessage);
 				}
 				
@@ -267,13 +215,12 @@ void *empfangen(void *message){
 	for(;;){
 		struct message rcvmessage = server.receive();
 		clientlist.insert(rcvmessage.add);
-		std::cout << rcvmessage<< std::endl;
 		if(rcvmessage.buffer[0] == kennung1 && rcvmessage.buffer[1] == kennung2 && rcvmessage.buffer[3] == functionID_request){
 			char idx = rcvmessage.buffer[4];
 			char state = rcvmessage.buffer[5];
 			modusmanager.SetState(idx,state);
 			std::cout <<"\nNachricht empfangen" << std::endl;
-			std::cout << std::vector<int>(rcvmessage.buffer.begin(), rcvmessage.buffer.end()) << std::endl;
+			std::cout << rcvmessage;
 		}
 	}
 }
@@ -292,11 +239,12 @@ int main(void){
 
 	for (;;) {
 		
-		/*
+		usleep(3000);
+		
 		std::cout << '\xd' << "Modus1: " << modusmanager.moduslist[0].GetState() << "   ";
 		std::cout <<  "Modus 2: " << modusmanager.moduslist[1].GetState() << "   ";
-		std::cout << "Batterie: " << batt << " %";
-		*/
+		std::cout << "Batterie: " << batt;
+		
 		/*
 		std::cout << "Modus1: " << modusmanager.moduslist[0].GetState() << std::endl;
 		std::cout <<  "Modus 2: " << modusmanager.moduslist[1].GetState() << std::endl;
